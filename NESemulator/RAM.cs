@@ -20,9 +20,6 @@ namespace NESemulator
         {
             this.vm = vm;
         }
-        /// <summary>
-        /// 電源オン時のリセット
-        /// </summary>
         public void OnHardReset()
         {
             for (int i = 0; i < wram.Length; i++)
@@ -32,12 +29,10 @@ namespace NESemulator
             wram[0xa] = 0xdf;
             wram[0xf] = 0xbf;
         }
-        /// <summary>
-        /// リセットボタンでのリセット
-        /// </summary>
         public void OnReset()
         {
         }
+        public void Run(ushort clockDelta) { }   
         public byte Read(ushort addr)
         {
             return wram[addr & 0x7ff];

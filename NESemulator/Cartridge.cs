@@ -9,7 +9,7 @@ namespace NESemulator
     /// カートリッジのベースクラス
     /// カートリッジには色々な形態があるのよ
     /// </summary>
-    class Cartridge
+    class Cartridge : IReset
     {
         const int SRAM_SIZE = 8192;
 
@@ -70,7 +70,8 @@ namespace NESemulator
             var mapperNo = nes.MapperNo;
             switch (mapperNo)
             {
-                case 0: break;
+                case 0:
+                    return new Mapper0(vm, nes);
                 case 1: break;
                 case 2: break;
                 case 3: break;
@@ -82,6 +83,15 @@ namespace NESemulator
                     throw new EmulatorException("Not Supported Mapper: " + mapperNo + "!");
             }
             return null;
+        }
+        public void OnHardReset()
+        {
+        }
+        public void OnReset()
+        {
+        }
+        public void Run(ushort clockDelta)
+        {
         }
     }
 }
