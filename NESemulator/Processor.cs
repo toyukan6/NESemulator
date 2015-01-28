@@ -27,6 +27,8 @@ namespace NESemulator
         byte SP;
         byte P;
 
+        bool nmi;
+
         private VirtualMachine vm;
         private bool needStatusRewrite;
         private byte newStatus;
@@ -42,6 +44,7 @@ namespace NESemulator
             PC = 0;
             SP = 0;
             P = 0;
+            nmi = false;
             needStatusRewrite = false;
             newStatus = 0;
         }
@@ -72,6 +75,7 @@ namespace NESemulator
 #else
             this.PC = (ushort)(Read(0xFFFC) | (Read(0xFFFD) << 8));
 #endif
+            nmi = false;
             needStatusRewrite = false;
             newStatus = 0;
         }
@@ -82,6 +86,7 @@ namespace NESemulator
             this.P |= FLAG_I;
             this.Write(0x4015, 0x0);
             this.PC = (ushort)(Read(0xFFFC) | (Read(0xFFFD) << 8));
+            nmi = false;
             needStatusRewrite = false;
             newStatus = 0;
         }
@@ -95,6 +100,8 @@ namespace NESemulator
                 this.P = newStatus;
                 needStatusRewrite = false;
             }
+
+            if (this.nmi) this.OnNMI();
 
             byte opcode = Read(this.PC);
 #if DEBUG
@@ -697,6 +704,24 @@ namespace NESemulator
             }
 
             ConsumeClock(CycleTable[opcode]);
+        }
+
+        public void SendNMI()
+        {
+            nmi = true;
+        }
+
+        void OnNMI()
+        {
+            //http://nesdev.com/6502_cpu.txt
+            ConsumeClock(7);
+            this.P = (byte)(this.P & ~FLAG_B);
+            Push((byte)((this.PC >> 8) & 0xFF));
+            Push((byte)(this.PC & 0xFF));
+            Push(this.P);
+            this.P |= FLAG_I;
+            this.PC = (ushort)((Read(0xFFFA) | (Read(0xFFFB) << 8)));
+            this.nmi = false;
         }
 
         private void ConsumeClock(byte clock)

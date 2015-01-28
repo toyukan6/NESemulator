@@ -9,11 +9,15 @@ namespace NESemulator
     /// カートリッジのベースクラス
     /// カートリッジには色々な形態があるのよ
     /// </summary>
-    class Cartridge : IReset
+    abstract class Cartridge : IReset
     {
         const int SRAM_SIZE = 8192;
 
         protected NesFile nesFile;
+
+        MirrorType mirrorType;
+
+        byte[,] vramMirroring;
 
         VirtualMachine vm;
         /// <summary>
@@ -23,42 +27,77 @@ namespace NESemulator
         /// <summary>
         /// セーブ用のRAM
         /// </summary>
-        byte[] sram = new byte[SRAM_SIZE]; 
-        ushort addrMask;
+        byte[] sram = new byte[SRAM_SIZE];
+
+        byte[] internalVram;
+
+        byte[] fourScreenVram;
 
         public Cartridge(VirtualMachine vm, NesFile nes)
         {
             this.vm = vm;
             this.nesFile = nes;
             this.hasSram = nes.SramFlag;
-            this.addrMask = (ushort)(nes.PrgPageCnt > 1 ? 0x7fff : 0x3fff);
+            mirrorType = nes.MirrorType;
             if (nesFile == null) throw new EmulatorException("NES FILE CAN'T BE NULL!");
         }
 
-        public byte ReadBankHigh(ushort addr)
+        public virtual byte ReadPatternTableLow(ushort addr);
+
+        public virtual void WritePatternTableLow(ushort addr, byte val);
+
+        public virtual byte ReadPatternTableHigh(ushort addr);
+
+        public virtual void WritePatternTableHigh(ushort addr, byte val);
+
+        public virtual byte ReadNameTable(ushort addr);
+
+        public virtual void WriteNameTable(ushort addr, byte val);
+
+        public virtual byte ReadRegisterArea(ushort addr)
         {
-            return this.nesFile.PrgRom[addr];
+            return (byte)(addr >> 8);
         }
-        public void WriteBankHigh(ushort addr, byte val)
+
+        public virtual void WriteRegisterArea(ushort addr, byte val);
+
+        public virtual byte ReadSaveArea(ushort addr)
         {
-            //have no effect
+            return ReadSram(addr);
         }
-        public byte ReadBankLow(ushort addr)
+
+        public virtual void WriteSaveArea(ushort addr, byte val)
         {
-            return this.nesFile.PrgRom[addr & addrMask];
+            WriteSram(addr, val);
         }
-        public void WriteBankLow(ushort addr, byte val)
+
+        public virtual byte ReadBankHigh(ushort addr);
+
+        public virtual void WriteBankHigh(ushort addr, byte val);
+
+        public virtual byte ReadBankLow(ushort addr);
+
+        public virtual void WriteBankLow(ushort addr, byte val);
+
+        public void ConnectInternalVram(byte[] internalVram)
         {
-            //have no effect
+            this.internalVram = internalVram;
+            ChangeMirrorType(this.mirrorType);
         }
-        public byte ReadSram(ushort addr)
+
+        public void ChangeMirrorType(MirrorType mirrorType)
+        {
+        }
+
+        protected byte ReadSram(ushort addr)
         {
             if (hasSram)
                 return this.sram[addr & 0x1fff];
             else
                 return 0;
         }
-        public void WriteSram(ushort addr, byte val)
+
+        protected void WriteSram(ushort addr, byte val)
         {
             if (hasSram)
                 this.sram[addr & 0x1fff] = val;
@@ -84,14 +123,11 @@ namespace NESemulator
             }
             return null;
         }
-        public void OnHardReset()
-        {
-        }
-        public void OnReset()
-        {
-        }
-        public void Run(ushort clockDelta)
-        {
-        }
+
+        public virtual void OnHardReset();
+
+        public virtual void OnReset();
+
+        public virtual void Run(ushort clockDelta);
     }
 }

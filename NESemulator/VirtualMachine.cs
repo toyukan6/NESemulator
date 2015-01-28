@@ -50,7 +50,7 @@ namespace NESemulator
                 case 0x2000:
                     return video.ReadReg(addr);
                 case 0x6000:
-                    return cartridge.ReadSram(addr);
+                    return cartridge.ReadSaveArea(addr);
                 case 0x8000:
                 case 0xA000:
                     return cartridge.ReadBankLow(addr);
@@ -77,7 +77,7 @@ namespace NESemulator
                     video.WriteReg(addr, value);
                     break;
                 case 0x6000:
-                    cartridge.WriteSram(addr, value);
+                    cartridge.WriteSaveArea(addr, value);
                     break;
                 case 0x8000:
                 case 0xA000:
@@ -92,6 +92,12 @@ namespace NESemulator
             }
 #endif
         }
+
+        public void SendNMI()
+        {
+            this.processor.SendNMI();
+        }
+
 #if DEBUG
         public byte[] TestData = new byte[65536];
 
