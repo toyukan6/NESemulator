@@ -256,5 +256,5 @@ namespace NESemulator
         }
     }
 
-    enum KeyID { A, B, START, SELECT, Up, Down, Right, Left }
+    enum KeyID { A = 0, B, SELECT, START, Up, Down, Left, Right }
 }

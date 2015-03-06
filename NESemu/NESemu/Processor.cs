@@ -14,8 +14,8 @@ namespace NESemulator
         const byte FLAG_C = 1;
         const byte FLAG_Z = 2;
         const byte FLAG_I = 4;
-        const byte FLAG_D = 8;
-        const byte FLAG_B = 16; //not used in NES
+        const byte FLAG_D = 8; //not used in NES
+        const byte FLAG_B = 16;
         const byte FLAG_ALWAYS_SET = 32;
         const byte FLAG_V = 64;
         const byte FLAG_N = 128;
@@ -70,11 +70,7 @@ namespace NESemulator
             this.Write(0x4015, 0x00);
             for (ushort i = 0x4000; i <= 0x4000; i++)
                 this.Write(i, 0x00);
-#if DEBUG
-            this.PC = 0xC000;
-#else
             this.PC = (ushort)(Read(0xFFFC) | (Read(0xFFFD) << 8));
-#endif
             nmi = false;
             needStatusRewrite = false;
             newStatus = 0;
@@ -114,12 +110,8 @@ namespace NESemulator
             flag += ((this.P & FLAG_I) > 0) ? 'I' : 'i';
             flag += ((this.P & FLAG_Z) > 0) ? 'Z' : 'z';
             flag += ((this.P & FLAG_C) > 0) ? 'C' : 'c';
-            if (vm.AddrExist(this.PC))
-            {
-                writer.WriteLine("{0} op:{1} a:{2} x:{3} y:{4} sp:{5} p:{6}", this.PC.ToString("x4"), opcode.ToString("x2"), this.A.ToString("x2"), this.X.ToString("x2"), this.Y.ToString("x2"), this.SP.ToString("x2"), flag);
-                writer.Flush();
-                Console.WriteLine("{0} op:{1} a:{2} x:{3} y:{4} sp:{5} p:{6}", this.PC.ToString("x4"), opcode.ToString("x2"), this.A.ToString("x2"), this.X.ToString("x2"), this.Y.ToString("x2"), this.SP.ToString("x2"), flag);
-            }
+            writer.WriteLine("{0} op:{1} a:{2} x:{3} y:{4} sp:{5} p:{6}", this.PC.ToString("x4"), opcode.ToString("x2"), this.A.ToString("x2"), this.X.ToString("x2"), this.Y.ToString("x2"), this.SP.ToString("x2"), flag);
+            writer.Flush();
 #endif
             this.PC++;
 

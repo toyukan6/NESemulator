@@ -50,7 +50,7 @@ namespace NESemulator
 
         void AnalyzeFile(byte[] data)
         {
-            uint size = (uint)data.Length - NES_FORMAT_SIZE;
+            uint size = (uint)data.Length;
 
             if (!(data[0] == 'N' && data[1] == 'E' && data[2] == 'S' && data[3] == 0x1A))
                 throw new EmulatorException("[FIXME] Invalid header: " + filename);
@@ -66,7 +66,7 @@ namespace NESemulator
             else
                 this.MirrorType = (data[6] & 0x1) == 0x1 ? MirrorType.VERTICAL : MirrorType.HORIZONTAL;
 
-            uint fptr = 0;
+            uint fptr = NES_FORMAT_SIZE;
             if (this.TrainerFlag)
             {
                 if (fptr + TRAINER_SIZE > size)

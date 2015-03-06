@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using Microsoft.Xna.Framework;
+using Microsoft.Xna.Framework.Content;
 using Microsoft.Xna.Framework.Graphics;
 
 namespace NESemulator
@@ -13,6 +15,8 @@ namespace NESemulator
     /// </summary>
     class Video : IReset
     {
+        GraphicsDevice graphics;
+
         VirtualMachine vm;
         Cartridge cartridge;
 
@@ -69,6 +73,8 @@ namespace NESemulator
         bool scrollRegisterWritten;
         bool vramAddrRegisterWritten;
 
+        Texture2D texture;
+
         public Video(VirtualMachine vm)
         {
             this.vm = vm;
@@ -76,6 +82,10 @@ namespace NESemulator
             nowY = 0;
             nowX = 0;
             spriteTable = new SpriteSlot[defaultSpriteCnt];
+            for (int i = 0; i < defaultSpriteCnt; i++)
+            {
+                spriteTable[i] = new SpriteSlot(0, 0, 0, 0, 0, false, false, false);
+            }
             spriteHitCnt = 0;
             executeNMIonVBlank = false;
             spriteHeight = 8; patternTableAddressBackground = 0;
@@ -165,18 +175,66 @@ namespace NESemulator
                 this.nowX -= 341;
                 if (this.nowY <= 240)
                 {
+                    for (int i = 0; i < ScreenWidth; i++)
+                        screenBuffer[nowY - 1, i] = (byte)(EmptyBit | this.palette[8, 0]); //0x00: 空
+                    SpriteEval();
+                    if (this.backgroundVisibility || this.spriteVisibility)
+                    {
+                        // from http://problemkaputt.de/everynes.htm#pictureprocessingunitppu
+                        vramAddrRegister = (ushort)((vramAddrRegister & 0x7BE0) | (vramAddrReloadRegister & 0x041F));
+                        BuildBgLine();
+                        BuildSpriteLine();
+                        vramAddrRegister += (1 << 12);
+                        vramAddrRegister = (ushort)(vramAddrRegister + ((vramAddrRegister & 0x8000) >> 10));
+                        vramAddrRegister &= 0x7fff;
+                        if ((vramAddrRegister & 0x03e0) == 0x3c0)
+                        {
+                            vramAddrRegister &= 0xFC1F;
+                            vramAddrRegister ^= 0x800;
+                        }
+                    }
                 }
                 else if (this.nowY == 241)
                 {
+                    //241: The PPU just idles during this scanline. Despite this, this scanline still occurs before the VBlank flag is set.
+                    //this.videoFairy.dispatchRendering(screenBuffer, this->paletteMask);
+                    MakeTexture();
+                    this.nowOnVBnank = true;
+                    spriteAddr = 0;//and typically contains 00h at the begin of the VBlank periods
                 }
                 else if (this.nowY == 242)
                 {
+                    // NESDEV: These occur during VBlank. The VBlank flag of the PPU is pulled low during scanline 241, so the VBlank NMI occurs here.
+                    // EVERYNES: http://nocash.emubase.de/everynes.htm#ppudimensionstimings
+                    // とあるものの…BeNesの実装だともっと後に発生すると記述されてる。詳しくは以下。
+                    // なお、$2002のレジスタがHIGHになった後にVBLANKを起こさないと「ソロモンの鍵」にてゲームが始まらない。
+                    // (NMI割り込みがレジスタを読み込みフラグをリセットしてしまう上、NMI割り込みが非常に長く、クリアしなくてもすでにVBLANKが終わった後に返ってくる)
+                    //nowOnVBlankフラグの立ち上がり後、数クロックでNMIが発生。
+                    if (executeNMIonVBlank)
+                        this.vm.SendNMI();
+                    this.vm.SendVBlank();
                 }
                 else if (this.nowY <= 261)
                 {
+                    //nowVBlank.
                 }
                 else if (this.nowY == 262)
                 {
+                    this.nowOnVBnank = false;
+                    this.sprite0Hit = false;
+                    this.nowY = 0;
+                    if (!this.isEven)
+                    {
+                        this.nowX++;
+                    }
+                    this.isEven = !this.isEven;
+                    // the reload value is automatically loaded into the Pointer at the end of the vblank period (vertical reload bits)
+                    // from http://nocash.emubase.de/everynes.htm#ppudimensionstimings
+                    if (this.backgroundVisibility || this.spriteVisibility)
+                    {
+                        this.vramAddrRegister = (ushort)((vramAddrRegister & 0x041F) | (vramAddrReloadRegister & 0x7BE0));
+                    }
+                    this.vm.FrameEnd();
                 }
                 else
                 {
@@ -346,35 +404,37 @@ namespace NESemulator
                     return BuildPPUStatusRegister();
                 case 0x04:
                     return ReadSpriteDataRegister();
+                case 0x07:
+                    return ReadVramDataRegister();
                 default: return 0;
             }
         }
 
-        public void WriteReg(ushort addr, byte value)
+        public void WriteReg(ushort addr, byte val)
         {
             //http://wiki.nesdev.com/w/index.php/PPU_registers#OAM_data_.28.242004.29_.3C.3E_read.2Fwrite
             switch (addr & 0x07)
             {
                 case 0x00:
-                    AnalyzePPUControlRegister1(value);
+                    AnalyzePPUControlRegister1(val);
                     break;
                 case 0x01:
-                    AnalyzePPUControlRegister2(value);
+                    AnalyzePPUControlRegister2(val);
                     break;
                 case 0x03:
-                    AnalyzeSpriteAddrRegister(value);
+                    AnalyzeSpriteAddrRegister(val);
                     break;
                 case 0x04:
-                    WriteSpriteDataRegister(value);
+                    WriteSpriteDataRegister(val);
                     break;
                 case 0x05:
-                    AnalyzePPUBackgroundScrollingOffset(value);
+                    AnalyzePPUBackgroundScrollingOffset(val);
                     break;
                 case 0x06:
-                    AnalyzeVramAddrRegister(value);
+                    AnalyzeVramAddrRegister(val);
                     break;
                 case 0x07:
-                    WriteVramDataRegister(value);
+                    WriteVramDataRegister(val);
                     break;
                 default:
                     throw new EmulatorException("Invalid addr: 0x" + addr.ToString("x2"));
@@ -452,8 +512,8 @@ namespace NESemulator
 
         void WriteSpriteDataRegister(byte val)
         {
-            WriteVram(vramAddrRegister, val);
-            vramAddrRegister = (ushort)((vramAddrRegister + vramIncrementSize) & 0x3fff);
+            WriteSprite(spriteAddr, val);
+            spriteAddr++;
         }
 
         byte ReadSprite(ushort addr)
@@ -461,7 +521,12 @@ namespace NESemulator
             return this.spRam[addr];
         }
 
-        byte ReadVramDataRegister(ushort addr)
+        void WriteSprite(ushort addr, byte val)
+        {
+            this.spRam[addr] = val;
+        }
+
+        byte ReadVramDataRegister()
         {
             if ((vramAddrRegister & 0x3f00) == 0x3f00)
             {
@@ -549,11 +614,65 @@ namespace NESemulator
 
         void WritePalette(ushort addr, byte val)
         {
+            if (val != 0)
+            {
+                int a = 0;
+                a += 1;
+            }
             if ((addr & 0x03) == 0)
                 this.palette[8, (addr >> 2) & 3] = (byte)(val & 0x3f);
             else
                 this.palette[(addr >> 2) & 7, addr & 3] = (byte)(val & 0x3f);
         }
+
+        public void ExecuteDMA(byte value)
+        {
+            ushort addrMask = (ushort)(value << 8);
+            for (ushort i = 0; i < 256; i++)
+            {
+                WriteSpriteDataRegister(vm.Read((ushort)(addrMask | i)));
+            }
+            this.vm.ConsumeCPUClock(514);
+        }
+
+        public void InitTexture(GraphicsDevice graphics)
+        {
+            this.graphics = graphics;
+            texture = new Texture2D(this.graphics, ScreenWidth, ScreenHeight);
+        }
+
+        void MakeTexture()
+        {
+            if (texture != null) texture.Dispose();
+            texture = new Texture2D(this.graphics, ScreenWidth, ScreenHeight);
+            int[] data = new int[screenBuffer.Length];
+            int i = 0;
+            foreach (var sb in screenBuffer)
+            {
+                data[i] = nesPaletteARGB[sb & paletteMask];
+                i++;
+            }
+            int size = texture.Width * texture.Height;
+            if (data.Length == size)
+                texture.SetData(data);
+        }
+
+        public void Draw(SpriteBatch spriteBatch)
+        {
+            spriteBatch.Begin();
+            spriteBatch.Draw(texture, new Rectangle(0, 0, ScreenWidth * 2, ScreenHeight * 2), Color.White);
+            spriteBatch.End();
+        }
+
+        int[] nesPaletteARGB = new int[64] {
+            0x787878, 0xB00020, 0xB80028, 0xA01060, 0x782098, 0x3010B0, 0x0030A0, 0x004078,
+    		0x005848, 0x006838, 0x006C38, 0x406030, 0x805030, 0x000000, 0x000000, 0x000000,
+    		0xB0B0B0, 0xF86040, 0xFF4040, 0xF04090, 0xC040D8, 0x6040D8, 0x0050E0, 0x0070C0,
+	    	0x008888, 0x00A050, 0x10A848, 0x68A048, 0xC09040, 0x000000, 0x000000, 0x000000,
+		    0xFFFFFF, 0xFFA060, 0xFF8050, 0xFF70A0, 0xFF60F0, 0xB060FF, 0x3078FF, 0x00A0FF,
+    		0x20D0E8, 0x00E898, 0x40F070, 0x90E070, 0xE0D060, 0x787878, 0x000000, 0x000000,
+	    	0xFFFFFF, 0xFFD090, 0xFFB8A0, 0xFFB0C0, 0xFFB0E0, 0xE8B8FF, 0xB8C8FF, 0xA0D8FF,
+		    0x90F0FF, 0x80F0C8, 0xA0F0A0, 0xC8FFA0, 0xF0FFA0, 0xA0A0A0, 0x000000, 0x000000 };
     }
 
     class SpriteSlot

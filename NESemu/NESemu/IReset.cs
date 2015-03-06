@@ -21,10 +21,5 @@ namespace NESemulator
         /// リセットボタンでのリセット
         /// </summary>
         void OnReset();
-        /// <summary>
-        /// 実行する
-        /// </summary>
-        /// <param name="clockDelta">clockの差</param>
-        void Run(ushort clockDelta);
     }
 }

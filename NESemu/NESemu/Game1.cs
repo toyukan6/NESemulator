@@ -7,7 +7,9 @@ using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
 using Microsoft.Xna.Framework.Storage;
 using Microsoft.Xna.Framework.GamerServices;
+using Microsoft.Xna.Framework.Audio;
 using System.IO;
+using System.Diagnostics;
 #endregion
 
 namespace NESemulator
@@ -20,11 +22,19 @@ namespace NESemulator
         GraphicsDeviceManager graphics;
         SpriteBatch spriteBatch;
 
+        Stopwatch sw;
+        VirtualMachine vm;
+
         public Game1()
             : base()
         {
             graphics = new GraphicsDeviceManager(this);
+            graphics.PreferredBackBufferHeight = 480;
+            graphics.PreferredBackBufferWidth = 512;
             Content.RootDirectory = "Content";
+            vm = new VirtualMachine();
+            vm.SendHardReset();
+            sw = new Stopwatch();
         }
 
         /// <summary>
@@ -38,6 +48,8 @@ namespace NESemulator
             // TODO: Add your initialization logic here
 
             base.Initialize();
+            vm.InitVideoTexture(GraphicsDevice);
+            vm.LoadCartridge("nestest.nes");
         }
 
         /// <summary>
@@ -72,6 +84,7 @@ namespace NESemulator
                 Exit();
 
             // TODO: Add your update logic here
+            vm.Run();
             base.Update(gameTime);
         }
 
@@ -81,10 +94,10 @@ namespace NESemulator
         /// <param name="gameTime">Provides a snapshot of timing values.</param>
         protected override void Draw(GameTime gameTime)
         {
-            GraphicsDevice.Clear(Color.CornflowerBlue);
+            GraphicsDevice.Clear(Color.Black);
 
             // TODO: Add your drawing code here
-
+            vm.Draw(spriteBatch);
             base.Draw(gameTime);
         }
     }
